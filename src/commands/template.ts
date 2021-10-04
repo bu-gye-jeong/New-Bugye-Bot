@@ -1,12 +1,14 @@
-import { SlashCommandBuilder } from "@discordjs/builders";
-import { CommandInteraction } from "discord.js/typings/index.js";
-import { ICommand, prisma } from "..";
+import { Embed, SlashCommandBuilder } from "@discordjs/builders";
+import { client, ICommand, prisma } from "..";
 import fs from "fs";
+import { CommandInteraction, MessageEmbed } from "discord.js";
+import { Prisma } from ".prisma/client";
 
 export default <ICommand>{
   data: new SlashCommandBuilder()
     .setName("btemplate")
     .setDescription("채널 이름 템플릿을 생성/삭제/변경/설정한다.")
+    .setDefaultPermission(false)
     .addSubcommand((subcommand) =>
       subcommand
         .setName("apply")
@@ -111,68 +113,104 @@ export default <ICommand>{
         )
     ),
   execute: async (interaction) => {
-    interaction.reply("처리 중...").then(() =>
-      listener(interaction).then((res) => {
-        if (res.length > 2000) {
-          const filePath = "./temp.txt";
+    await interaction.deferReply();
+    if (!interaction.guildId)
+      return "이 명령어는 서버 내에서만 사용 가능합니다.";
 
-          fs.writeFileSync(filePath, res);
-          interaction.editReply({ files: ["./temp.txt"] });
-          fs.unlinkSync(filePath);
-        } else {
-          interaction.editReply(res);
-        }
-      })
+    const server =
+      (await prisma.server.findFirst({
+        where: {
+          id: interaction.guildId,
+        },
+      })) ??
+      (await prisma.server.create({
+        data: {
+          id: interaction.guildId,
+          templateData: {},
+        },
+      }));
+    const template = server.templateData;
+
+    if (!template || typeof template !== "object" || Array.isArray(template))
+      return "무언가 문제가 발생한 것 같습니다... 봇 제작자에게 문의하세요.";
+
+    let result: string = "헋 님뭐라쓴거";
+
+    result = actions[interaction.options.getSubcommand()](
+      interaction,
+      template
     );
-  },
-};
 
-async function listener(interaction: CommandInteraction): Promise<string> {
-  if (!interaction.guildId) return "이 명령어는 서버 내에서만 사용 가능합니다.";
-
-  const server =
-    (await prisma.server.findFirst({
+    await prisma.server.update({
       where: {
         id: interaction.guildId,
       },
-    })) ??
-    (await prisma.server.create({
       data: {
-        id: interaction.guildId,
-        templateData: {},
+        templateData: template,
       },
-    }));
-  const template = server.templateData;
+    });
 
-  if (!template || typeof template !== "object" || Array.isArray(template))
-    return "무언가 문제가 발생한 것 같습니다... 봇 제작자에게 문의하세요.";
+    if (result.length > 2000) {
+      const filePath = "./temp.txt";
 
-  let result = "헋 님뭐라쓴거";
+      fs.writeFileSync(filePath, result);
+      await interaction.editReply({ files: ["./temp.txt"] });
+      fs.unlinkSync(filePath);
+    } else {
+      result.length != 0 && (await interaction.editReply(result));
+    }
+  },
+};
 
-  switch (interaction.options.getSubcommand()) {
-    case "create":
-      const name = interaction.options.getString("template_name");
-      if (!name) return "템플릿 이름을 적어주세요.";
-      if (template[name]) {
-        result = `템플릿 \`${name}\`가 이미 존재합니다!`;
-      } else {
-        template[name] = {};
-        result = `성공적으로 템플릿 \`${name}\`을 생성했습니다!`;
-      }
-      break;
-    case "list":
-      result = "헉샌즈";
-      break;
-  }
-
-  await prisma.server.update({
-    where: {
-      id: interaction.guildId,
-    },
-    data: {
-      templateData: template,
-    },
-  });
-
-  return result;
-}
+const actions: {
+  [index: string]: (
+    interaction: CommandInteraction,
+    template: Prisma.JsonObject
+  ) => string;
+} = {
+  create: (interaction, template) => {
+    const name = interaction.options.getString("template_name");
+    if (!name) return "템플릿 이름을 적어주세요.";
+    if (template[name]) {
+      return `템플릿 \`${name}\`가 이미 존재합니다!`;
+    } else {
+      template[name] = {};
+      return `성공적으로 템플릿 \`${name}\`을 생성했습니다!`;
+    }
+  },
+  list: (interaction, template) => {
+    const embed = new MessageEmbed().setColor(0xfcba03).addFields({
+      name: "현재 템플릿들",
+      value:
+        "```" +
+        (Object.keys(template)
+          .map((v) => " - " + (v.length > 20 ? v.substring(0, 20) + "..." : v))
+          .join("\n") || "없음") +
+        "```",
+    });
+    interaction.editReply({ embeds: [embed] });
+    return "";
+  },
+  delete: (interaction, template) => {
+    const name = interaction.options.getString("template_name");
+    if (!name) return "템플릿 이름을 적어주세요.";
+    if (template[name]) {
+      delete template[name];
+      return `성공적으로 템플릿 \`${name}\`을 제거했습니다!`;
+    } else {
+      return `템플릿 \`${name}\`가 존재하지 않습니다!`;
+    }
+  },
+  save: (interaction, template) => {
+    const name = interaction.options.getString("template_name");
+    if (!name) return "템플릿 이름을 적어주세요.";
+    if (template[name]) {
+      return `템플릿 \`${name}\`가 이미 존재합니다!`;
+    } else {
+      template[name] = interaction
+        .guild!.channels.cache.toJSON()
+        .map((v) => ({ id: v.id, name: v.name }));
+      return `성공적으로 현재 채널들을 템플릿 \`${name}\`에 저장했습니다!`;
+    }
+  },
+};

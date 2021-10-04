@@ -3,6 +3,7 @@ import { SlashCommandBuilder } from "@discordjs/builders";
 import { REST } from "@discordjs/rest";
 import { Routes } from "discord-api-types/v9";
 import {
+  ApplicationCommand,
   Client,
   Collection,
   CommandInteraction,
@@ -16,7 +17,6 @@ import { clientId, guildId } from "../config.json";
 export interface ICommand {
   data: SlashCommandBuilder;
   execute(interaction: CommandInteraction): any;
-  permissions?: string[];
 }
 export interface IEvent {
   name: string;
@@ -31,8 +31,8 @@ const rest = new REST({ version: "9" }).setToken(token);
 export const client = new Client({ intents: [Intents.FLAGS.GUILDS] });
 export const prisma = new PrismaClient();
 
-const commandDatas = [];
-const commands = new Collection<string, ICommand>();
+export let commands: ApplicationCommand[];
+const commandDatas = new Collection<string, ICommand>();
 const commandFiles = fs
   .readdirSync(path.join(__dirname, "/commands"))
   .filter((file) => file.endsWith(dev ? "ts" : "js"));
@@ -42,8 +42,7 @@ const eventFiles = fs
 
 for (const file of commandFiles) {
   const command: ICommand = require(`./commands/${file}`).default;
-  commands.set(command.data.toJSON().name, command);
-  commandDatas.push(command.data.toJSON());
+  commandDatas.set(command.data.toJSON().name, command);
 }
 for (const file of eventFiles) {
   const event: IEvent = require(`./events/${file}`).default;
@@ -56,7 +55,7 @@ client.once("ready", () => {
 
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
-  const command = commands.get(interaction.commandName);
+  const command = commandDatas.get(interaction.commandName);
 
   if (!command) return;
 
@@ -75,9 +74,9 @@ client.on("interactionCreate", async (interaction) => {
   try {
     console.log("Started refreshing application (/) commands.");
 
-    await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
-      body: commandDatas,
-    });
+    commands = (await rest.put(Routes.applicationCommands(clientId), {
+      body: commandDatas.toJSON().map((command) => command.data.toJSON()),
+    })) as ApplicationCommand[];
 
     console.log("Successfully reloaded application (/) commands.");
   } catch (error) {
