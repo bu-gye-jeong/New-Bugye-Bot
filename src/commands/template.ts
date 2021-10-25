@@ -115,7 +115,9 @@ export default <ICommand>{
   execute: async (interaction) => {
     await interaction.deferReply();
     if (!interaction.guildId)
-      return "이 명령어는 서버 내에서만 사용 가능합니다.";
+      return interaction.editReply(
+        "이 명령어는 서버 내에서만 사용 가능합니다."
+      );
 
     const server =
       (await prisma.server.findFirst({
@@ -132,7 +134,9 @@ export default <ICommand>{
     const template = server.templateData;
 
     if (!template || typeof template !== "object" || Array.isArray(template))
-      return "무언가 문제가 발생한 것 같습니다... 봇 제작자에게 문의하세요.";
+      return interaction.editReply(
+        "무언가 문제가 발생한 것 같습니다... 봇 제작자에게 문의하세요."
+      );
 
     let result: string = "헋 님뭐라쓴거";
 
