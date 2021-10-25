@@ -142,7 +142,7 @@ export default <ICommand>{
 
     result = actions[interaction.options.getSubcommand()](
       interaction,
-      template
+      template as Template
     );
 
     await prisma.server.update({
@@ -166,10 +166,17 @@ export default <ICommand>{
   },
 };
 
+interface Template extends Prisma.JsonObject {
+  [index: string]: {
+    id: string;
+    name: string;
+  }[];
+}
+
 const actions: {
   [index: string]: (
     interaction: CommandInteraction,
-    template: Prisma.JsonObject
+    template: Template
   ) => string;
 } = {
   create: (interaction, template) => {
@@ -178,7 +185,7 @@ const actions: {
     if (template[name]) {
       return `템플릿 \`${name}\`가 이미 존재합니다!`;
     } else {
-      template[name] = {};
+      template[name] = [];
       return `성공적으로 템플릿 \`${name}\`을 생성했습니다!`;
     }
   },
