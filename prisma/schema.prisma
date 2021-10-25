@@ -1,16 +1,35 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model server {
   id            String @id
   templateData  Json?
+  labyrinthData labyrinth?
+}
+
+model labyrinth {
+  id          Int @id @default(autoincrement())
+  server      server @relation(fields: [serverId], references: [id])
+  serverId    String
+
+  questions   question[]
+  logChannels String[]
+}
+
+model question {
+  name        String @id
+  labyrinth   labyrinth @relation(fields: [labyrinthId], references: [id])
+  labyrinthId Int
+
+  alias       String[]
+  hints       String[]
+  channels    String[]
+  roles       String[]
+  permissions String[]
 }
