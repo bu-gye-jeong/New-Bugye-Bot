@@ -74,9 +74,14 @@ client.on("interactionCreate", async (interaction) => {
   try {
     console.log("Started refreshing application (/) commands.");
 
-    commands = (await rest.put(Routes.applicationCommands(clientId), {
-      body: commandDatas.toJSON().map((command) => command.data.toJSON()),
-    })) as ApplicationCommand[];
+    commands = (await rest.put(
+      dev
+        ? Routes.applicationGuildCommands(clientId, guildId)
+        : Routes.applicationCommands(clientId),
+      {
+        body: commandDatas.toJSON().map((command) => command.data.toJSON()),
+      }
+    )) as ApplicationCommand[];
 
     console.log("Successfully reloaded application (/) commands.");
   } catch (error) {
