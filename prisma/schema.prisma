@@ -23,13 +23,16 @@ model labyrinth {
 }
 
 model question {
-  name        String @id
+  name        String 
   labyrinth   labyrinth @relation(fields: [labyrinthId], references: [id])
   labyrinthId Int
 
+  answers     String[]
   alias       String[]
   hints       String[]
   channels    String[]
   roles       String[]
   permissions String[]
+
+  @@id([name, labyrinthId])
 }
